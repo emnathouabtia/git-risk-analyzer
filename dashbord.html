@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Git Risk Analyzer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #F5F3FF;
+    color: #1F2937;
+    min-height: 100vh;
+  }
+
+  /* HEADER */
+  .header {
+    background: linear-gradient(135deg, #7C3AED 0%, #4C1D95 100%);
+    padding: 2rem 3rem;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header-left h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.5px; }
+  .header-left p  { font-size: 0.9rem; opacity: 0.75; margin-top: 4px; }
+  .header-badge {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 99px;
+    padding: 6px 16px;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+
+  /* MAIN */
+  .main { padding: 2rem 3rem; max-width: 1400px; margin: 0 auto; }
+
+  /* UPLOAD ZONE */
+  .upload-zone {
+    background: white;
+    border: 2px dashed #C4B5FD;
+    border-radius: 12px;
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    margin-bottom: 2rem;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .upload-zone:hover { border-color: #7C3AED; background: #FAF5FF; }
+  .upload-zone input { display: none; }
+  .upload-zone p { color: #7C3AED; font-weight: 600; font-size: 0.95rem; margin-top: 0.5rem; }
+  .upload-zone span { color: #9CA3AF; font-size: 0.82rem; }
+
+  /* METRICS */
+  .metrics { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; margin-bottom: 2rem; }
+  .metric-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    border: 1px solid #EDE9FE;
+    box-shadow: 0 1px 3px rgba(124,58,237,0.06);
+  }
+  .metric-val  { font-size: 2rem; font-weight: 700; line-height: 1; }
+  .metric-lbl  { font-size: 0.75rem; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.6px; margin-top: 4px; }
+  .v-violet { color: #7C3AED; }
+  .v-green  { color: #059669; }
+  .v-yellow { color: #D97706; }
+  .v-red    { color: #DC2626; }
+
+  /* FILTERS */
+  .filters {
+    background: white;
+    border-radius: 12px;
+    padding: 1rem 1.5rem;
+    border: 1px solid #EDE9FE;
+    margin-bottom: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .filters label { font-size: 0.82rem; color: #6B7280; font-weight: 600; }
+  .filters select, .filters input[type=range] {
+    border: 1px solid #DDD6FE;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    color: #374151;
+    background: white;
+    cursor: pointer;
+  }
+  .filters select:focus { outline: 2px solid #7C3AED; border-color: transparent; }
+  .filter-group { display: flex; align-items: center; gap: 8px; }
+  #bugMin-val { font-size: 0.85rem; font-weight: 600; color: #7C3AED; min-width: 20px; }
+
+  /* CHARTS GRID */
+  .charts-row { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+  .charts-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+  .chart-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    border: 1px solid #EDE9FE;
+    box-shadow: 0 1px 3px rgba(124,58,237,0.06);
+  }
+  .chart-title {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: #1F2937;
+    border-bottom: 2px solid #EDE9FE;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  .chart-wrap { position: relative; height: 300px; }
+
+  /* TABLE */
+  .table-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    border: 1px solid #EDE9FE;
+    box-shadow: 0 1px 3px rgba(124,58,237,0.06);
+    margin-bottom: 2rem;
+  }
+  .table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+  .table-wrap { overflow-x: auto; max-height: 400px; overflow-y: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  thead th {
+    background: #7C3AED;
+    color: white;
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    cursor: pointer;
+    user-select: none;
+  }
+  thead th:hover { background: #6D28D9; }
+  tbody tr { border-bottom: 1px solid #F3F4F6; transition: background 0.1s; }
+  tbody tr:hover { background: #FAF5FF; }
+  tbody td { padding: 9px 14px; color: #374151; }
+
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 99px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .badge-safe   { background: #D1FAE5; color: #065F46; }
+  .badge-risk   { background: #FEF3C7; color: #92400E; }
+  .badge-danger { background: #FEE2E2; color: #991B1B; }
+
+  /* EXPORT BTN */
+  .btn-export {
+    background: #7C3AED;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 18px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .btn-export:hover { background: #5B21B6; }
+
+  /* EMPTY STATE */
+  .empty {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: #9CA3AF;
+    display: none;
+  }
+  .empty.show { display: block; }
+
+  /* FOOTER */
+  footer {
+    text-align: center;
+    color: #9CA3AF;
+    font-size: 0.78rem;
+    padding: 1.5rem;
+    border-top: 1px solid #EDE9FE;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>🔍 Git Risk Analyzer</h1>
+    <p>Analyse intelligente des risques · Decision Tree + Random Forest</p>
+  </div>
+  <span class="header-badge">ENICarthage</span>
+</div>
+
+<div class="main">
+
+  <!-- UPLOAD -->
+  <div class="upload-zone" id="dropZone" onclick="document.getElementById('csvInput').click()">
+    <input type="file" id="csvInput" accept=".csv">
+    <p>📂 Charger results.csv</p>
+    <span>Glisse ton fichier ici ou clique pour sélectionner</span>
+  </div>
+
+  <!-- MÉTRIQUES -->
+  <div class="metrics">
+    <div class="metric-card"><div class="metric-val v-violet" id="m-total">—</div><div class="metric-lbl">Fonctions</div></div>
+    <div class="metric-card"><div class="metric-val v-green"  id="m-safe">—</div><div class="metric-lbl">Sans risque</div></div>
+    <div class="metric-card"><div class="metric-val v-yellow" id="m-risk">—</div><div class="metric-lbl">À risque</div></div>
+    <div class="metric-card"><div class="metric-val v-red"    id="m-danger">—</div><div class="metric-lbl">Risquées</div></div>
+    <div class="metric-card"><div class="metric-val v-violet" id="m-bugs">—</div><div class="metric-lbl">Total bugs</div></div>
+  </div>
+
+  <!-- FILTRES -->
+  <div class="filters">
+    <div class="filter-group">
+      <label>Niveau de risque</label>
+      <select id="riskFilter" onchange="applyFilters()">
+        <option value="all">Tous</option>
+        <option value="0">Sans risque</option>
+        <option value="1">À risque</option>
+        <option value="2">Risquée</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Bugs minimum</label>
+      <input type="range" id="bugMin" min="0" max="20" value="0" oninput="document.getElementById('bugMin-val').textContent=this.value; applyFilters()">
+      <span id="bugMin-val">0</span>
+    </div>
+    <div class="filter-group">
+      <label>Recherche</label>
+      <input type="text" id="search" placeholder="Nom de fonction..." style="border:1px solid #DDD6FE;border-radius:8px;padding:6px 10px;font-size:0.85rem;" oninput="applyFilters()">
+    </div>
+  </div>
+
+  <!-- CHARTS ROW 1 -->
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="chart-title">📊 Top 15 fonctions les plus risquées</div>
+      <div class="chart-wrap"><canvas id="barChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">🥧 Répartition des risques</div>
+      <div class="chart-wrap"><canvas id="pieChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- CHARTS ROW 2 -->
+  <div class="charts-row2">
+    <div class="chart-card">
+      <div class="chart-title">📈 Bugs vs Touches</div>
+      <div class="chart-wrap"><canvas id="scatterChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">📉 Lignes modifiées par niveau de risque</div>
+      <div class="chart-wrap"><canvas id="linesChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="table-card">
+    <div class="table-header">
+      <div class="chart-title" style="border:none;margin:0;padding:0">📋 Tableau détaillé</div>
+      <button class="btn-export" onclick="exportCSV()">⬇ Exporter CSV</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="sortTable('function')">Fonction ↕</th>
+            <th onclick="sortTable('touched')">Touches ↕</th>
+            <th onclick="sortTable('bugs')">Bugs ↕</th>
+            <th onclick="sortTable('lines_changed')">Lignes ↕</th>
+            <th>Risque DT</th>
+            <th>Risque RF</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+      <div class="empty" id="emptyState">Aucune donnée — charge un fichier results.csv</div>
+    </div>
+  </div>
+
+</div>
+
+<footer>Git Risk Analyzer · Random Forest + Decision Tree · ENICarthage</footer>
+
+<script>
+let allData = [];
+let filteredData = [];
+let sortKey = 'bugs';
+let sortAsc = false;
+let charts = {};
+
+const riskLabel = { 0: 'Sans risque', 1: 'À risque', 2: 'Risquée' };
+const riskBadge = { 0: 'badge-safe', 1: 'badge-risk', 2: 'badge-danger' };
+const riskColor = { 0: '#059669', 1: '#D97706', 2: '#DC2626' };
+
+// DRAG & DROP
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.background='#FAF5FF'; });
+dropZone.addEventListener('dragleave', () => { dropZone.style.background=''; });
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.style.background=''; loadFile(e.dataTransfer.files[0]); });
+document.getElementById('csvInput').addEventListener('change', e => loadFile(e.target.files[0]));
+
+function loadFile(file) {
+  Papa.parse(file, {
+    header: true, dynamicTyping: true, skipEmptyLines: true,
+    complete: res => {
+      allData = res.data.map(r => ({
+        ...r,
+        predicted_risk_rf: r.predicted_risk_rf ?? r.predicted_risk ?? 0,
+        predicted_risk:    r.predicted_risk ?? 0
+      }));
+      document.getElementById('bugMin').max = Math.max(...allData.map(r => r.bugs || 0));
+      applyFilters();
+      dropZone.style.display = 'none';
+    }
+  });
+}
+
+function applyFilters() {
+  const risk   = document.getElementById('riskFilter').value;
+  const minBug = parseInt(document.getElementById('bugMin').value);
+  const search = document.getElementById('search').value.toLowerCase();
+
+  filteredData = allData.filter(r => {
+    const rf = r.predicted_risk_rf ?? r.predicted_risk ?? 0;
+    if (risk !== 'all' && rf != risk) return false;
+    if ((r.bugs || 0) < minBug) return false;
+    if (search && !r.function.toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  updateMetrics();
+  renderCharts();
+  renderTable();
+}
+
+function updateMetrics() {
+  const d = filteredData;
+  document.getElementById('m-total').textContent  = d.length;
+  document.getElementById('m-safe').textContent   = d.filter(r => (r.predicted_risk_rf??r.predicted_risk??0) == 0).length;
+  document.getElementById('m-risk').textContent   = d.filter(r => (r.predicted_risk_rf??r.predicted_risk??0) == 1).length;
+  document.getElementById('m-danger').textContent = d.filter(r => (r.predicted_risk_rf??r.predicted_risk??0) == 2).length;
+  document.getElementById('m-bugs').textContent   = d.reduce((s,r) => s + (r.bugs||0), 0);
+}
+
+function renderCharts() {
+  const d = filteredData;
+  if (!d.length) return;
+
+  // TOP 15 BAR
+  const top15 = [...d].sort((a,b) => (b.bugs||0)-(a.bugs||0)).slice(0,15);
+  renderChart('barChart', 'bar', {
+    labels: top15.map(r => r.function),
+    datasets: [{
+      data: top15.map(r => r.bugs||0),
+      backgroundColor: top15.map(r => riskColor[r.predicted_risk_rf??r.predicted_risk??0] + '99'),
+      borderColor:     top15.map(r => riskColor[r.predicted_risk_rf??r.predicted_risk??0]),
+      borderWidth: 1.5, borderRadius: 4
+    }]
+  }, {
+    indexAxis: 'y',
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: '#F3F4F6' } },
+      y: { ticks: { font: { size: 11 } } }
+    }
+  });
+
+  // PIE
+  const counts = [0,1,2].map(k => d.filter(r => (r.predicted_risk_rf??r.predicted_risk??0)==k).length);
+  renderChart('pieChart', 'doughnut', {
+    labels: ['Sans risque','À risque','Risquée'],
+    datasets: [{ data: counts, backgroundColor: ['#059669','#D97706','#DC2626'], borderWidth: 2, borderColor: 'white' }]
+  }, {
+    cutout: '55%',
+    plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 16 } } }
+  });
+
+  // SCATTER
+  const scatterSets = [0,1,2].map(k => ({
+    label: riskLabel[k],
+    data: d.filter(r => (r.predicted_risk_rf??r.predicted_risk??0)==k).map(r => ({ x: r.touched||0, y: r.bugs||0, fn: r.function })),
+    backgroundColor: riskColor[k] + 'AA',
+    borderColor: riskColor[k],
+    pointRadius: 6, pointHoverRadius: 8
+  }));
+  renderChart('scatterChart', 'scatter', { datasets: scatterSets }, {
+    scales: {
+      x: { title: { display: true, text: 'Touches' }, grid: { color: '#F3F4F6' } },
+      y: { title: { display: true, text: 'Bugs' }, grid: { color: '#F3F4F6' } }
+    },
+    plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 12 } },
+               tooltip: { callbacks: { label: ctx => `${ctx.raw.fn}: bugs=${ctx.raw.y}, touches=${ctx.raw.x}` } } }
+  });
+
+  // LINES CHANGED BAR
+  const groups = [0,1,2].map(k => {
+    const group = d.filter(r => (r.predicted_risk_rf??r.predicted_risk??0)==k);
+    return group.length ? Math.round(group.reduce((s,r) => s+(r.lines_changed||0),0) / group.length) : 0;
+  });
+  renderChart('linesChart', 'bar', {
+    labels: ['Sans risque','À risque','Risquée'],
+    datasets: [{
+      label: 'Moy. lignes modifiées',
+      data: groups,
+      backgroundColor: ['#059669AA','#D97706AA','#DC2626AA'],
+      borderColor:     ['#059669','#D97706','#DC2626'],
+      borderWidth: 1.5, borderRadius: 6
+    }]
+  }, {
+    plugins: { legend: { display: false } },
+    scales: { y: { grid: { color: '#F3F4F6' }, title: { display: true, text: 'Lignes (moyenne)' } } }
+  });
+}
+
+function renderChart(id, type, data, options) {
+  if (charts[id]) charts[id].destroy();
+  const ctx = document.getElementById(id).getContext('2d');
+  charts[id] = new Chart(ctx, {
+    type,
+    data,
+    options: { responsive: true, maintainAspectRatio: false, ...options }
+  });
+}
+
+function renderTable() {
+  const sorted = [...filteredData].sort((a,b) => {
+    const va = a[sortKey] ?? '', vb = b[sortKey] ?? '';
+    return sortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+  });
+
+  const tbody = document.getElementById('tableBody');
+  const empty = document.getElementById('emptyState');
+
+  if (!sorted.length) {
+    tbody.innerHTML = '';
+    empty.classList.add('show');
+    return;
+  }
+  empty.classList.remove('show');
+
+  tbody.innerHTML = sorted.map(r => {
+    const rfRisk = r.predicted_risk_rf ?? r.predicted_risk ?? 0;
+    const dtRisk = r.predicted_risk ?? 0;
+    return `<tr>
+      <td style="font-weight:500">${r.function}</td>
+      <td>${r.touched||0}</td>
+      <td><strong>${r.bugs||0}</strong></td>
+      <td>${r.lines_changed||0}</td>
+      <td><span class="badge ${riskBadge[dtRisk]}">${riskLabel[dtRisk]}</span></td>
+      <td><span class="badge ${riskBadge[rfRisk]}">${riskLabel[rfRisk]}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function sortTable(key) {
+  if (sortKey === key) sortAsc = !sortAsc;
+  else { sortKey = key; sortAsc = false; }
+  renderTable();
+}
+
+function exportCSV() {
+  const headers = ['function','touched','bugs','lines_changed','risque_dt','risque_rf'];
+  const rows = filteredData.map(r => [
+    r.function, r.touched||0, r.bugs||0, r.lines_changed||0,
+    riskLabel[r.predicted_risk??0], riskLabel[r.predicted_risk_rf??r.predicted_risk??0]
+  ]);
+  const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'analyse_risques_filtree.csv';
+  a.click();
+}
+</script>
+</body>
+</html>
